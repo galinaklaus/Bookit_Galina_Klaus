@@ -1,5 +1,6 @@
 package com.bookit.step_definitions;
 
+import com.bookit.pages.HuntPage;
 import com.bookit.pages.LogInPage;
 import com.bookit.pages.MapPage;
 import com.bookit.pages.SelfPage;
@@ -15,8 +16,15 @@ import io.restassured.path.json.JsonPath;
 import io.restassured.response.Response;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.openqa.selenium.By;
+import org.openqa.selenium.WebElement;
+import org.openqa.selenium.interactions.Actions;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.WebDriverWait;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.io.File;
 import static org.junit.Assert.*;
@@ -33,6 +41,10 @@ public class BookApiStepDefs {
     Response response;
     //this map is used to share data between steps
     Map<String, String> newRecordMap;
+
+    WebDriverWait wait = new WebDriverWait(Driver.getDriver(), 25);
+    HuntPage huntPage = new HuntPage();
+
 
     @Given("User logged in to Bookit api as teacher role")
     public void user_logged_in_to_Bookit_api_as_teacher_role() {
@@ -58,11 +70,7 @@ public class BookApiStepDefs {
         response.then().log().all();
     }
 
-    @Then("status code should be {int}")
-    public void status_code_should_be(int expStatusCode) {
-        assertEquals("Status code verification failed",expStatusCode, response.statusCode());
-        response.then().statusCode(expStatusCode);
-    }
+
 
     @Then("content type is {string}")
     public void content_type_is(String expContentType) {
@@ -318,6 +326,164 @@ public class BookApiStepDefs {
                         )).and().log().all();
 
     }
+
+    /**
+     Scenario: Team lead should be able to see the available rooms
+     Given User logged in to Bookit app as team lead role
+     When User goes to room hunt page
+     And User searches for room with date:
+     |date |September 4, 2022|
+     |from |7:00am           |
+     |to   |7:30am           |
+     Then User should see available rooms
+     And User logged in to Bookit api as team lead role
+     And User sends GET request to "/api/rooms/available" with:
+     | year | 2022 |
+     | month | 9 |
+     | day | 4 |
+     | conference-type | SOLID |
+     | cluster-name | light-side |
+     | timeline-id | 8 | --?ask Olya
+     Then status code should be 200
+     And available rooms in response should match UI results
+     And available rooms in database should match UI and API results
+     */
+    @Given("User logged in to Bookit app as team lead role")
+    public void user_logged_in_to_Bookit_app_as_team_lead_role() {
+
+        Driver.getDriver().get(Environment.URL);
+        LogInPage logInPage = new LogInPage();
+
+        logInPage.login(Environment.LEADER_EMAIL, Environment.LEADER_PASSWORD);
+    }
+
+    @When("User goes to room hunt page")
+    public void user_goes_to_room_hunt_page() {
+
+        MapPage mapPage=new MapPage();
+
+        mapPage.huntLink.click();
+    }
+
+    @When("User searches for room with date:")
+    public void user_searches_for_room_with_date(Map <String,String> dateMap) {
+
+      // Actions actions = new Actions(Driver.getDriver());
+
+       // wait.until(ExpectedConditions.elementToBeSelected(huntPage.dateInput));
+        huntPage.dateInput.sendKeys(dateMap.get("date"));
+
+        LOG.info("enter the date");
+
+        wait.until(ExpectedConditions.elementToBeClickable(huntPage.fromDropdown));
+
+        huntPage.fromDropdown.click();
+
+        wait.until(ExpectedConditions.elementToBeClickable(By.xpath(huntPage.timeSlot(dateMap.get("from")))));
+        Driver.getDriver().findElement(By.xpath(huntPage.timeSlot(dateMap.get("from")))).click();
+        LOG.info("enter the start time -> from");
+
+       // for (WebElement eachTime: huntPage.timeList) {
+
+//            wait.until(ExpectedConditions.elementToBeClickable(eachTime));
+//            if (eachTime.getText().contains(dateMap.get("from"))){
+//
+//                eachTime.click();
+//                break;
+//            }
+//        }
+        wait.until(ExpectedConditions.elementToBeClickable(huntPage.toDropdown));
+
+        huntPage.toDropdown.click();
+
+        BrowserUtils.waitFor(3);
+
+        wait.until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.xpath("//span[@class='mat-option-text']")));
+
+                for (WebElement eachTime: huntPage.timeList) {
+                   wait.until(ExpectedConditions.elementToBeClickable(eachTime));
+                    if (eachTime.getText().contains(dateMap.get("to"))){
+
+                       eachTime.click();
+                        break;
+                    }
+                }
+        LOG.info("enter the end time -> to");
+
+            wait.until(ExpectedConditions.elementToBeClickable(huntPage.searchBtn));
+            huntPage.searchBtn.click();
+
+        LOG.info("click submit button");
+    }
+
+    @Then("User should see available rooms")
+    public void user_should_see_available_rooms() {
+
+        System.out.println("huntPage.roomList.size() = " + huntPage.roomList.size());
+
+        assertTrue(huntPage.roomList.size()>0);
+
+    }
+
+    @Then("User sends GET request to {string} with:")
+    public void user_sends_GET_request_to_with(String endPoint, Map<String,String>roomParams) {
+
+        System.out.println("base url "+baseUrl+ endPoint+ " access token "+accessToken);
+
+        response =given().accept(ContentType.JSON)
+                .and().queryParams(roomParams)
+                .and().header("Authorization", accessToken)
+                .when().get(baseUrl + endPoint);
+        response.prettyPrint();
+
+    }
+
+    @Then("status code should be {int}")
+    public void status_code_should_be(int expStatusCode) {
+
+        System.out.println("response.statusCode() = " + response.statusCode());
+        assertEquals("Status code verification failed",expStatusCode, response.statusCode());
+//        response.then().statusCode(expStatusCode);
+    }
+    @Then("available rooms in response should match UI results")
+    public void available_rooms_in_response_should_match_UI_results() {
+
+        List <String> apiRooms = response.path("name");
+        System.out.println("listApiRooms = " + apiRooms);
+
+        List<String> uiRooms  = new ArrayList<>();
+
+        for (WebElement eachRoom: huntPage.roomList) {
+            uiRooms.add(eachRoom.getText());
+        }
+        System.out.println("room names = " + uiRooms);
+
+        assertEquals("Rooms results do not match",apiRooms, uiRooms);
+
+    }
+
+    @Then("available rooms in database should match UI and API results")
+    public void available_rooms_in_database_should_match_UI_and_API_results() {
+
+        String query = "Select room.name from room\n" +
+                "inner join cluster c on c.id = room.cluster_id\n" +
+                "where c.name='light-side';";
+
+        List<Object> dbRooms = DBUtils.getColumnData(query, "name");
+
+        List <String> apiRooms = response.path("name");
+
+        List<String> uiRooms  = new ArrayList<>();
+
+        for (WebElement eachRoom: huntPage.roomList) {
+            uiRooms.add(eachRoom.getText());
+        }
+
+        assertEquals("Rooms results (ui vs api) do not match",apiRooms, uiRooms);
+        assertEquals("Rooms results (db vs api) do not match",apiRooms, dbRooms);
+
+    }
+
 
 
 

@@ -5,18 +5,18 @@ Feature: Verify room reservation functionality
     Given User logged in to Bookit app as team lead role
     When User goes to room hunt page
     And User searches for room with date:
-      |date |September 4, 2022|
-      |from |7:00am           |
-      |to   |7:30am           |
+      |date |September 5, 2022|
+      |from |1:00pm           |
+      |to   |1:30pm           |
     Then User should see available rooms
     And User logged in to Bookit api as team lead role
     And User sends GET request to "/api/rooms/available" with:
-      | year | 2022 |
-      | month | 9 |
-      | day | 4 |
-      | conference-type | SOLID |
-      | cluster-name | light-side |
-      | timeline-id | 11237 |
+      | year            | 2022       |
+      | month           | 9          |
+      | day             | 6          |
+      | conference-type | SOLID      |
+      | cluster-name    | light-side |
+      | timeline-id     | 8          |
     Then status code should be 200
     And available rooms in response should match UI results
     And available rooms in database should match UI and API results
