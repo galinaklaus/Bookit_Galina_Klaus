@@ -5,10 +5,12 @@ import com.bookit.pages.MapPage;
 import com.bookit.pages.SelfPage;
 import com.bookit.utilities.*;
 import com.github.javafaker.Faker;
+import io.cucumber.java.en.And;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import io.restassured.http.ContentType;
+import io.restassured.module.jsv.JsonSchemaValidator;
 import io.restassured.path.json.JsonPath;
 import io.restassured.response.Response;
 import org.apache.logging.log4j.LogManager;
@@ -16,7 +18,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.HashMap;
 import java.util.Map;
-
+import java.io.File;
 import static org.junit.Assert.*;
 import static io.restassured.RestAssured.*;
 import static org.junit.Assert.assertEquals;
@@ -175,6 +177,25 @@ public class BookApiStepDefs {
                 .then().log().all();
     }
 
+    /**
+     Feature: Add new student
+
+     Scenario: Add new student and verify status code 201
+     Given User logged in to Bookit api as teacher role
+     When Users sends POST request to "/api/students/student" with following info:
+     | first-name      | harold              |
+     | last-name       | finch               |
+     | email           | harolds4Email78945@gmail.com  |
+     | password        | abc123              |
+     | role            | student-team-leader |
+     | campus-location | VA                  |
+     | batch-number    | 8                   |
+     | team-name       | Nukes               |
+     Then status code should be 201
+     And Database should contain same student info
+     And User should able to login bookit app on ui
+     And User deletes previously created student
+     */
     @Then("Database should contain same student info")
     public void database_should_contain_same_student_info() {
 
@@ -214,5 +235,90 @@ public class BookApiStepDefs {
                 .when().delete(baseUrl + "/api/students/{id}")
                 .then().statusCode(204).log().all();
     }
+    /**
+     Feature: Team module verifications
+
+     Scenario Outline: 2 Point Team info verification. API and Database
+     Given User logged in to Bookit api as teacher role
+     And User sends GET request to "/api/teams/{id}" with "<team_id>"
+     Then status code should be 200
+     And Team name should be "<team_name>" in response
+     And Database query should have same "<team_id>" and "<team_name>"
+     Examples:
+     */
+
+    @And("User sends GET request to {string} with {string}")
+    public void userSendsGETRequestToWith(String endPoint, String id) {
+
+       response= given().accept(ContentType.JSON)
+                .and().pathParam("id",id)
+                .and().header("Authorization",accessToken)
+                .when().get(baseUrl+endPoint);
+       response.prettyPrint();
+    }
+
+    @And("Team name should be {string} in response")
+    public void teamNameShouldBeInResponse(String expectedName) {
+
+        JsonPath jsonPath = response.then().extract().jsonPath();
+
+        String actualName = jsonPath.getString("name");
+
+        assertThat(actualName, is(expectedName));
+    }
+
+    @And("Database query should have same {string} and {string}")
+    public void databaseQueryShouldHaveSameAnd(String teamId, String teamName) {
+
+        int id = Integer.parseInt(teamId);
+
+        String sql = "SELECT id, name FROM team WHERE id = " + id;
+
+        Map<String, Object> dbMap = DBUtils.getRowMap(sql);
+
+       System.out.println("dbMap = " + dbMap);
+
+        assertThat(dbMap.get("name"), is(teamName));
+        assertThat(dbMap.get("id"), is((long)id));
+
+    }
+
+    /**
+     Feature: Json Schema validation
+
+     Scenario: GET request and perform json schema validation of response
+     Given User logged in to Bookit api as team lead role
+     When User sends GET request to "/api/students/me"
+     Then status code should be 200
+     And response should match "json-schemas/student-schema.json" schema
+     */
+
+    @Given("User logged in to Bookit api as team lead role")
+    public void user_logged_in_to_Bookit_api_as_team_lead_role() {
+
+        String email = Environment.LEADER_EMAIL;
+        String password = Environment.LEADER_PASSWORD;
+        LOG.info("Authorizing teacher user : email = " + email + ", password = " + password);
+        LOG.info("Environment base url = " + baseUrl);
+
+        accessToken = BookItApiUtil.getAccessToken(email, password);
+
+        if (accessToken == null || accessToken.isEmpty()) {
+            LOG.error("Could not authorize user in authorization server");
+            fail("Could not authorize user in authorization server");
+        }
+
+    }
+
+    @Then("response should match {string} schema")
+    public void response_should_match_schema(String expectedSchema) {
+
+        response.then().body(JsonSchemaValidator.matchesJsonSchema(
+                                new File("src/test/resources/json-schemas/student-schema.json")
+                        )).and().log().all();
+
+    }
+
+
 
 }

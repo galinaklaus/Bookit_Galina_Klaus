@@ -19,4 +19,7 @@ public class MapPage extends BasePage {
         selfLink.click();
     }
 
+    @FindBy(linkText = "hunt")
+    public WebElement huntLink;
+
 }

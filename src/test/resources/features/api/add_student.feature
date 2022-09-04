@@ -7,7 +7,7 @@ Feature: Add new student
     When Users sends POST request to "/api/students/student" with following info:
       | first-name      | harold              |
       | last-name       | finch               |
-      | email           | harolds4Email78945@gmail.com  |
+      | email           | harolds442211@gmail.com  |
       | password        | abc123              |
       | role            | student-team-leader |
       | campus-location | VA                  |
